@@ -1,0 +1,7 @@
+clientWhiteList:
+    - "*"
+    
+tunnels:
+  - "6432:localhost:5432"
+  
+connectTimeout: 10000 
