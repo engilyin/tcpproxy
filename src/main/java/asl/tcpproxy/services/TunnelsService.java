@@ -18,14 +18,13 @@
  */
 package asl.tcpproxy.services;
 
+import java.util.List;
 import java.util.Map;
 import java.util.stream.Collectors;
-import java.util.stream.Stream;
 
 import javax.annotation.PostConstruct;
 import javax.annotation.PreDestroy;
 
-import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 
 import asl.tcpproxy.AppConfig;
@@ -34,31 +33,33 @@ import asl.tcpproxy.tunnels.Tunnel;
 @Service
 public class TunnelsService {
 
-	@Autowired
 	AppConfig config;
 
-	Stream<Tunnel> tunnels;
+	List<Tunnel> tunnels;
 
-	@PostConstruct
-	void init() {
-		tunnels = config.getTunnels().parallelStream().map(tunnelDesc -> createTunnel(tunnelDesc));
+	public TunnelsService(AppConfig config) {
+        this.config = config;
+    }
 
+    @PostConstruct
+	private void init() {
+		tunnels = config.getTunnels().parallelStream().map(tunnelDesc -> createTunnel(tunnelDesc)).collect(Collectors.toList());
 	}
+    
+    @PreDestroy
+    private void close() {
+        tunnels.forEach(tunnel -> tunnel.close());
+    }
+    
+    public Map<String, String> status() {
+        return tunnels.stream().collect(Collectors.toMap(t -> t.descriptor(), t -> t.toString()));
+    }
 
-	Tunnel createTunnel(String tunnelDesc) {
+	private Tunnel createTunnel(String tunnelDesc) {
 		Tunnel tunnel = new Tunnel(tunnelDesc, config.getConnectTimeout(), config.getClientWhiteListAddresses());
 
-		tunnel.init();
+		tunnel.open();
 
 		return tunnel;
-	}
-
-	@PreDestroy
-	void close() {
-		tunnels.forEach(tunnel -> tunnel.close());
-	}
-
-	public Map<String, String> status() {
-		return tunnels.collect(Collectors.toMap(t -> t.descriptor(), t -> t.toString()));
 	}
 }

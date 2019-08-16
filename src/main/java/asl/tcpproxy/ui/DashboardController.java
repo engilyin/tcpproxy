@@ -19,22 +19,29 @@
  */
 package asl.tcpproxy.ui;
 
-import java.util.Map;
-
-import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.stereotype.Controller;
+import org.springframework.ui.Model;
 import org.springframework.web.bind.annotation.GetMapping;
-import org.springframework.web.bind.annotation.RestController;
 
 import asl.tcpproxy.services.StatusService;
 
-@RestController
+@Controller
 public class DashboardController {
 
-	@Autowired
 	StatusService statusService;
-	
-	@GetMapping("/")
-	public Map<String, Object> home() {
-		return statusService.configurationInfo();
+
+	public DashboardController(StatusService statusService) {
+        this.statusService = statusService;
+    }
+
+    @GetMapping("/")
+	public String home(Model model) {
+        
+        model.addAttribute("status", statusService.status());
+        model.addAttribute("timeout", statusService.timeout());
+        model.addAttribute("appVersion", statusService.appVersion());
+        model.addAttribute("tunnels", statusService.tunnels());
+        
+        return "index";
 	}
 }

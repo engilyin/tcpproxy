@@ -1,0 +1,41 @@
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org">
+<head>
+<meta http-equiv="Content-Type" content="text/html; charset=UTF-8" />
+<title>TCP Proxy</title>
+<link rel="stylesheet" type="text/css" media="all" href="/css/main.css" />
+</head>
+<body>
+	<div id="container">
+		<h1>TCP Proxy</h1>
+		<h2>List of available connections</h2>
+
+		<table>
+			<tr>
+				<td>Status:</td>
+				<td>
+					<p th:text="${status}">Unknown</p>
+				</td>
+			</tr>
+			<tr>
+				<td>Version:</td>
+				<td>
+					<p th:text="${appVersion}">Unknown</p>
+				</td>
+			</tr>
+			<tr>
+				<td>Connect timeout:</td>
+				<td>
+					<p th:text="${timeout}">Unknown</p>
+				</td>
+			</tr>
+		</table>
+
+		<table>
+			<tr th:each="tunnel : ${tunnels}">
+				<td th:text="${tunnel}"></td>
+			</tr>
+		</table>
+	</div>
+</body>
+</html>

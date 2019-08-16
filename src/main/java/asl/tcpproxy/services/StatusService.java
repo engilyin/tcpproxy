@@ -19,9 +19,9 @@
 package asl.tcpproxy.services;
 
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
 
-import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 
 import asl.tcpproxy.AppConfig;
@@ -29,21 +29,44 @@ import asl.tcpproxy.AppConfig;
 @Service
 public class StatusService {
 
-	@Autowired
-	AppConfig config;
+    AppConfig config;
 
-	@Autowired
-	TunnelsService tunnelsService;
+    TunnelsService tunnelsService;
 
-	public Map<String, Object> configurationInfo() {
-		Map<String, Object> info = new HashMap<>();
+    public StatusService(AppConfig config, TunnelsService tunnelsService) {
+        this.config = config;
+        this.tunnelsService = tunnelsService;
+    }
 
-		info.put("status", "TCP Proxy up and running");
-		info.put("Client White List", config.getClientWhiteList());
-		info.put("Connect timeout", config.getConnectTimeout());
+    public String status() {
+        return "TCP Proxy up and running";
+    }
+    
+    public int timeout() {
+        return config.getConnectTimeout();
+    }
 
-		info.put("tunnels: ", tunnelsService.status());
+    public List<String> clientWhiteList() {
+        return config.getClientWhiteList();
+    }
+    
+    public Map<String, String> tunnels() {
+        return tunnelsService.status();
+    }
+    
+    public String appVersion() {
+        return config.appVersion();
+    }
 
-		return info;
-	}
+    public Map<String, Object> configurationInfo() {
+        Map<String, Object> info = new HashMap<>();
+
+        info.put("status", status());
+        info.put("Client White List", clientWhiteList());
+        info.put("Connect timeout", timeout());
+
+        info.put("tunnels: ", tunnelsService.status());
+
+        return info;
+    }
 }
