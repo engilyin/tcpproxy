@@ -1,9 +1,20 @@
+
+buildscript {
+    dependencies {
+        classpath 'net.sf.proguard:proguard-gradle:6.1.1'
+        classpath 'net.sf.proguard:proguard-base:6.1.1'
+    }
+}
+
 plugins {
 	id 'org.springframework.boot' version '2.1.6.RELEASE'
 	id 'java'
 	id 'eclipse'
 	id 'idea'
 }
+
+//def javaHome = '/Library/Java/JavaVirtualMachines/jdk1.8.0_65.jdk/Contents/Home/jre'
+def javaHome = "${System.getProperty('java.home')}"
 
 apply plugin: 'io.spring.dependency-management'
 
@@ -20,7 +31,9 @@ repositories {
 }
 
 dependencies {
-	implementation 'org.springframework.boot:spring-boot-starter-web'
+	implementation ('org.springframework.boot:spring-boot-starter-web') {
+	   exclude(module: 'org.springframework.boot.jta')
+	}
 	implementation 'org.springframework.boot:spring-boot-starter-thymeleaf'
 	
 	implementation 'org.apache.mina:mina-core:2.0.20'
@@ -28,3 +41,127 @@ dependencies {
 	
 	testImplementation 'org.springframework.boot:spring-boot-starter-test'
 }
+
+task buildRelease {
+    dependsOn 'repack'
+}
+
+
+task extractJar(type: Copy) {
+
+    def zipFile = file("${buildDir}/libs/${rootProject.name}-${version}.jar")
+    def outputDir = file("${buildDir}/unpacked/")
+
+    from zipTree(zipFile)
+    into outputDir
+}
+
+
+
+task unzip(type: Copy, dependsOn: extractJar) {
+    println "unzip"
+
+    def unzippedDir = "${buildDir}/unpacked/BOOT-INF/classes" 
+    def depsFolder = file("${buildDir}/unpacked/BOOT-INF/lib")
+
+    depsFolder.listFiles().each {
+        from(zipTree(it))
+    }
+    into unzippedDir
+}
+
+task deleteUnusedClasses(type: Delete, dependsOn: unzip) {
+
+    def baseClassDir = "${buildDir}/unpacked/BOOT-INF/classes/"
+    
+    delete "${baseClassDir}/org/springframework/boot/jta/"
+}
+
+task proguard(type: proguard.gradle.ProGuardTask, dependsOn: deleteUnusedClasses) {
+
+    configuration 'proguard.conf'
+    injars  "${buildDir}/unpacked/BOOT-INF/classes"
+    outjars "${buildDir}/obfClasses"
+
+    libraryjars "${System.getProperty('java.home')}/lib/rt.jar"
+    
+}
+
+//https://discuss.gradle.org/t/obfuscated-jars-what-are-the-best-practices/18834/6
+task obfuscate(type: proguard.gradle.ProGuardTask, dependsOn: deleteUnusedClasses) {
+    mustRunAfter ('javadoc')
+    inputs.file  file("${jar.archivePath}")
+    outputs.file file("$buildDir/proguard/${project.name}-${project.version}.jar")
+
+    injars  "${buildDir}/unpacked/BOOT-INF/classes"
+    
+    //def deps = file("${buildDir}/unpacked/BOOT-INF/lib")
+    //deps.listFiles().each {
+    //   println "Add dep ${it}"
+    
+    //   libraryjars "${it}"
+    //}
+
+    // JDK 8 and below use jars on the classpath
+    if (JavaVersion.current().java8Compatible &&    !JavaVersion.current().java9Compatible) {
+        println "Obfuscation inputs based on JDK 8 layout."
+        println "Path to rt $javaHome/lib/rt.jar}"
+        libraryjars "$javaHome/lib/rt.jar"
+        libraryjars "$javaHome/lib/jce.jar"
+        libraryjars "$javaHome/lib/ext/jfxrt.jar"
+    } else {
+        // JDK 9 and above use modules on the module-path
+        println "Obfuscation inputs based on JDK 9+ module layout."
+        def jdkModuleList = [
+            'java.base', 'java.datatransfer', 'java.desktop',
+            'java.instrument', 'java.logging',
+            'java.management', 'java.prefs', 'java.rmi',
+            'java.scripting', 'java.xml',
+            'jdk.attach'
+        ]
+        jdkModuleList.forEach {
+            libraryjars "$javaHome/jmods/${it}.jmod", jarfilter: '!**.jar', filter: '!module-info.class'
+        }
+        target '10' // JDK 9 is obsolete, would target 11, but Proguard can't deal with 11's class files yet
+    }
+    // dependencies
+    configurations.runtime.files.each {
+        libraryjars it, filter: '!META-INF/versions/**'
+    }
+   
+    outjars "$buildDir/proguard/${project.name}-${project.version}.jar"
+    printseeds "$buildDir/proguard/proguard_seeds.txt"
+    printmapping "$buildDir/proguard/proguard_map.txt"
+
+    configuration 'proguard.conf'
+}
+
+
+task deleteClasses(type: Delete, dependsOn: obfuscate) {
+    delete "${buildDir}/unpacked/BOOT-INF/classes/"
+}
+
+task copyObfuscatedClasses(type: Copy, dependsOn: deleteClasses) {
+    from "${buildDir}/obfClasses"
+    into "${buildDir}/unpacked/BOOT-INF/classes/"
+    include 'com/**'
+    include '*.properties'
+}
+
+task copyObfuscatedJars(type: Copy, dependsOn: copyObfuscatedClasses) {
+    from "${buildDir}/obfClasses"
+    into "${buildDir}/unpacked/BOOT-INF/lib/"
+    include '*.jar'
+}
+
+task deleteObfuscated(type: Delete, dependsOn: copyObfuscatedJars) {
+    delete 'build/obfClasses'
+}
+
+task repack(type: Zip, dependsOn: deleteObfuscated) {
+    from  "${buildDir}/unpacked"
+    entryCompression ZipEntryCompression.STORED
+    archiveName "${rootProject.name}-${version}-obf.jar"
+    destinationDir(file("${buildDir}/libs"))
+}
+
